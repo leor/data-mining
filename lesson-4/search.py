@@ -26,6 +26,6 @@ if __name__ == '__main__':
         for row in db.vacancies.find({'min_salary': {'$gt': min}}).sort('min_salary', pymongo.ASCENDING):
             result.append(row)
 
-    df = DataFrame(result, columns=['title', 'link', 'min_salary', 'max_salary', 'source'])
+    df = DataFrame(result, columns=['title', 'link', 'min_salary', 'max_salary', 'original_min_salary', 'original_max_salary', 'rate', 'currency', 'source'])
     
     print(df)
