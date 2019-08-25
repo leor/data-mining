@@ -2,6 +2,31 @@ import requests
 from bs4 import BeautifulSoup as bs
 import time
 import re
+from settings import CURRENCY_MAP
+from currency import get_last_rate
+
+
+rates = {}
+
+
+def convert_currency(min_s, max_s, cur, rates 
+= rates):
+    min_s_c, max_s_c, rate = (min_s, max_s, 1)
+
+    if cur.strip() and cur.strip() != 'руб' and cur.strip() != '₽':
+        c_code = CURRENCY_MAP.get(cur)
+        if c_code:
+            if c_code in rates:
+                rate = rates.get(c_code)
+            else:
+                rate = get_last_rate(c_code)
+
+            if rate:
+                min_s_c = min_s * rate
+                max_s_c = max_s * rate
+                rates[c_code] = rate
+    
+    return (min_s_c, max_s_c, rate)
 
 
 def extract_salary(value):
@@ -9,43 +34,57 @@ def extract_salary(value):
     min, max = value.split('-') if re.search(r'\-', value) else (value, None)
 
     min = int(''.join(re.findall(r'(\d+)', min)))
-    max = int(''.join(re.findall(r'(\d+)', max))) if max else None
+    if min is None:
+        min = 0
+    max = int(''.join(re.findall(r'(\d+)', max))) if max else 0
+    
+    currency = ''.join(re.findall('[a-zA-Zа-яА-Я₽]+', value.replace('от ', '').replace('до ', ''))).strip()
 
-    return min, max
+    return min, max, currency
     
 
-def parse_hh_vacancies(vacancies):
+def parse_hh_vacancies(vacancies, rates = rates):
     vacancy_data = []
 
     for vacancy in vacancies:
         header = vacancy.find('div', class_='vacancy-serp-item__row_header')
         nl = header.find('div', class_='resume-search-item__name').find('a')
-        min_s, max_s = extract_salary(header.find('div', class_='vacancy-serp-item__compensation').text)
+        min_s, max_s, cur = extract_salary(header.find('div', class_='vacancy-serp-item__compensation').text)
+        min_s_c, max_s_c, rate = convert_currency(min_s, max_s, cur)
 
         vacancy_data.append({
             'title': nl.text,
             'link': nl['href'],
-            'min_salary': min_s,
-            'max_salary': max_s,
+            'original_min_salary': min_s,
+            'original_max_salary': max_s,
+            'min_salary': min_s_c, 
+            'max_salary': max_s_c,
+            'rate': rate,
+            'currency': cur,
             'source': 'hh.ru'
         })
 
     return vacancy_data
 
 
-def parse_sj_vacancies(vacancies):
+def parse_sj_vacancies(vacancies, rates = rates):
     vacancy_data = []
 
     for vacancy in vacancies:
         v = vacancy.find('div', class_='_1Tocb').nextSibling
 
-        min_s, max_s = extract_salary(v.find('span', class_='_3mfro _2Wp8I f-test-text-company-item-salary PlM3e _2JVkc _2VHxz').text)
-        
+        min_s, max_s, currency = extract_salary(v.find('span', class_='_3mfro _2Wp8I f-test-text-company-item-salary PlM3e _2JVkc _2VHxz').text)
+        min_s_c, max_s_c, rate = convert_currency(min_s, max_s, currency)
+
         vacancy_data.append({
             'title': v.find('a').find('div').text,
             'link': v.find('a')['href'],
-            'min_salary': min_s,
-            'max_salary': max_s,
+            'original_min_salary': min_s,
+            'original_max_salary': max_s,
+            'min_salary': min_s_c, 
+            'max_salary': max_s_c,
+            'rate': rate,
+            'currency': currency, 
             'source': 'superjob.ru'
         })
 
